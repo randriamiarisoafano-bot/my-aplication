@@ -11,17 +11,24 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.example.myapplicationvc.ui.theme.MyApplicationvcTheme
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 
 class MainActivity : ComponentActivity() {
 
@@ -37,47 +44,57 @@ class MainActivity : ComponentActivity() {
                     putExtra(ScreenCaptureService.EXTRA_DATA, result.data)
                 }
                 startForegroundService(serviceIntent)
-            } else {
-                // Handle permission denial
             }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize the crash handler
-        Thread.setDefaultUncaughtExceptionHandler(CrashHandler(this))
+        requestIgnoreBatteryOptimizations()
 
         setContent {
             MyApplicationvcTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    ScreenCaptureContent { 
-                        val screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent()
-                        screenCaptureLauncher.launch(screenCaptureIntent)
-                    }
+                    ServiceControlContent(
+                        onStart = { 
+                            val screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent()
+                            screenCaptureLauncher.launch(screenCaptureIntent)
+                        },
+                        onStop = { 
+                            val serviceIntent = Intent(this, ScreenCaptureService::class.java)
+                            stopService(serviceIntent) 
+                        }
+                    )
                 }
             }
+        }
+    }
+
+    private fun requestIgnoreBatteryOptimizations() {
+        val intent = Intent()
+        val packageName = packageName
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+            intent.action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+            intent.data = Uri.parse("package:$packageName")
+            startActivity(intent)
         }
     }
 }
 
 @Composable
-fun ScreenCaptureContent(onStartCapture: () -> Unit) {
+fun ServiceControlContent(onStart: () -> Unit, onStop: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Button(onClick = onStartCapture) {
-            Text("Start Screen Capture")
+        Button(onClick = onStart) {
+            Text("Start Service")
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun DefaultPreview() {
-    MyApplicationvcTheme {
-        ScreenCaptureContent { }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onStop) {
+            Text("Stop Service")
+        }
     }
 }

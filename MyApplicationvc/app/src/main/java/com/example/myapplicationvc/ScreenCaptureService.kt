@@ -22,6 +22,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -45,6 +46,7 @@ class ScreenCaptureService : Service() {
         super.onCreate()
         mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         createNotificationChannel()
+        createDataCaptureNotificationChannel()
     }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -58,7 +60,7 @@ class ScreenCaptureService : Service() {
             startScreenCapture()
         }
 
-        return START_NOT_STICKY
+        return START_REDELIVER_INTENT
     }
 
     private fun startScreenCapture() {
@@ -119,6 +121,7 @@ class ScreenCaptureService : Service() {
         return matchResult?.groups?.get(1)?.value?.toDoubleOrNull()
     }
 
+    @SuppressLint("MissingPermission")
     private fun saveCrashData(multiplier: Double) {
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         val csvLine = "$timestamp,$multiplier\n"
@@ -127,6 +130,17 @@ class ScreenCaptureService : Service() {
             FileOutputStream(file, true).bufferedWriter().use { writer ->
                 writer.append(csvLine)
             }
+
+            // Notify user of data capture
+            val notification = NotificationCompat.Builder(this, DATA_CAPTURE_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Donnée Capturée")
+                .setContentText("Multiplicateur : $multiplier")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .build()
+
+            NotificationManagerCompat.from(this).notify(DATA_CAPTURE_NOTIFICATION_ID, notification)
+
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -168,10 +182,21 @@ class ScreenCaptureService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
+    private fun createDataCaptureNotificationChannel() {
+        val name = "Data Capture"
+        val descriptionText = "Notifications for when data is captured"
+        val importance = NotificationManager.IMPORTANCE_HIGH
+        val channel = NotificationChannel(DATA_CAPTURE_CHANNEL_ID, name, importance).apply {
+            description = descriptionText
+        }
+        val notificationManager: NotificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+
     private fun createNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Screen Capture")
-            .setContentText("Capturing screen...")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .build()
     }
@@ -192,5 +217,7 @@ class ScreenCaptureService : Service() {
         const val EXTRA_DATA = "data"
         private const val SERVICE_ID = 1
         private const val CHANNEL_ID = "ScreenCaptureChannel"
+        private const val DATA_CAPTURE_CHANNEL_ID = "DataCaptureChannel"
+        private const val DATA_CAPTURE_NOTIFICATION_ID = 2
     }
 }
